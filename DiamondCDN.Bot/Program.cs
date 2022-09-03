@@ -1,6 +1,4 @@
-﻿using DiamondCDN.Bot;
-
-namespace Authware.Bot;
+﻿namespace DiamondCDN.Bot;
 
 internal static class Program
 {

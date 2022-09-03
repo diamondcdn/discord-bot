@@ -1,0 +1,21 @@
+﻿FROM mcr.microsoft.com/dotnet/runtime:6.0 AS base
+WORKDIR /app
+
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+WORKDIR /src
+COPY ["DiamondCDN.Bot/DiamondCDN.Bot.csproj", "DiamondCDN.Bot/"]
+COPY ["DiamondCDN.Bot.Common/DiamondCDN.Bot.Common.csproj", "DiamondCDN.Bot.Common/"]
+COPY ["DiamondCDN.Bot.Commands/DiamondCDN.Bot.Commands.csproj", "DiamondCDN.Bot.Commands/"]
+COPY ["DiamondCDN.Bot.Services/DiamondCDN.Bot.Services.csproj", "DiamondCDN.Bot.Services/"]
+RUN dotnet restore "DiamondCDN.Bot/DiamondCDN.Bot.csproj"
+COPY . .
+WORKDIR "/src/DiamondCDN.Bot"
+RUN dotnet build "DiamondCDN.Bot.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "DiamondCDN.Bot.csproj" -c Release -o /app/publish
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "DiamondCDN.Bot.dll"]

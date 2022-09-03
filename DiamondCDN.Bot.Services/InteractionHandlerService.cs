@@ -1,4 +1,6 @@
-﻿using DiamondCDN.Bot.Common.Utils;
+﻿using DiamondCDN.Bot.Common.Models;
+using DiamondCDN.Bot.Common.Utils;
+using DiamondCDN.Bot.Services.Interfaces;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
@@ -13,19 +15,51 @@ public class InteractionHandlerService
     private readonly IServiceProvider _provider;
     private readonly IConfiguration _configuration;
     private readonly InteractionService _interaction;
+    private readonly ITicketService _ticketService;
     private readonly ILogger<InteractionHandlerService> _logger;
 
     public InteractionHandlerService(DiscordSocketClient client, IServiceProvider provider,
-        ILogger<InteractionHandlerService> logger, IConfiguration configuration, InteractionService interaction)
+        ILogger<InteractionHandlerService> logger, IConfiguration configuration, InteractionService interaction,
+        ITicketService ticketService)
     {
         _client = client;
         _provider = provider;
         _logger = logger;
         _configuration = configuration;
         _interaction = interaction;
+        _ticketService = ticketService;
         _client.InteractionCreated += ClientOnInteractionCreated;
         _client.ButtonExecuted += HandleButtonExecuted;
+        _client.SelectMenuExecuted += HandleSelectMenuExecuted;
         _client.ModalSubmitted += HandleModalSubmitted;
+    }
+
+    private async Task HandleSelectMenuExecuted(SocketMessageComponent arg)
+    {
+        switch (arg.Data.Type)
+        {
+            case ComponentType.SelectMenu:
+            {
+                if (arg.Data.CustomId == "open-ticket")
+                {
+                    _logger.LogInformation("Opening ticket via select");
+
+                    await _ticketService.CreateTicketAsync(arg, Enum.Parse<TicketType>(arg.Data.Values.First()));
+                }
+
+                break;
+            }
+            case ComponentType.ActionRow:
+            case ComponentType.Button:
+            case ComponentType.TextInput:
+            case ComponentType.ModalSubmit:
+            default:
+            {
+                // Unhandled interaction type
+                _logger.LogInformation("Unhandled interaction type: {Type}", arg.Type);
+                break;
+            }
+        }
     }
 
     private async Task HandleModalSubmitted(SocketModal arg)
@@ -85,36 +119,42 @@ public class InteractionHandlerService
         {
             case ComponentType.Button:
             {
-                if (!arg.Data.CustomId.StartsWith("close-ticket-")) return;
+                if (arg.Data.CustomId.StartsWith("close-ticket-"))
+                {
+                    _logger.LogInformation("Confirming ticket closure");
 
-                _logger.LogInformation("Confirming ticket closure");
+                    var userId = arg.Data.CustomId.Split('-').LastOrDefault();
+                    if (!ulong.TryParse(userId, out var validUserId)) return;
 
-                var userId = arg.Data.CustomId.Split('-').LastOrDefault();
-                if (!ulong.TryParse(userId, out var validUserId)) return;
+                    Modal modal;
 
-                Modal modal;
+                    if (arg.User.Id != validUserId)
+                        // Do a confirm modal
+                        modal = new ModalBuilder()
+                            .WithTitle("Confirm closing ticket")
+                            .WithCustomId("confirm-" + arg.Data.CustomId)
+                            .AddTextInput("Why are you closing the ticket?", "ticket-close-text", TextInputStyle.Short,
+                                "The issue was...", 0, 100, true)
+                            .Build();
+                    else
+                        modal = new ModalBuilder()
+                            .WithTitle("Confirm closing ticket")
+                            .WithCustomId("confirm-" + arg.Data.CustomId)
+                            .AddTextInput("Why are you closing the ticket?", "ticket-close-text", TextInputStyle.Short,
+                                "The issue was...", 0, 100, true)
+                            .AddTextInput("Any feedback for how this ticket was handled?", "ticket-feedback-text",
+                                TextInputStyle.Paragraph, "I really enjoyed...", 0, 1000, false)
+                            .Build();
 
-                if (arg.User.Id != validUserId)
-                    // Do a confirm modal
-                    modal = new ModalBuilder()
-                        .WithTitle("Confirm closing ticket")
-                        .WithCustomId("confirm-" + arg.Data.CustomId)
-                        .AddTextInput("Why are you closing the ticket?", "ticket-close-text", TextInputStyle.Short,
-                            "The issue was...", 0, 100, true)
-                        .Build();
-                else
-                    modal = new ModalBuilder()
-                        .WithTitle("Confirm closing ticket")
-                        .WithCustomId("confirm-" + arg.Data.CustomId)
-                        .AddTextInput("Why are you closing the ticket?", "ticket-close-text", TextInputStyle.Short,
-                            "The issue was...", 0, 100, true)
-                        .AddTextInput("Any feedback for how this ticket was handled?", "ticket-feedback-text",
-                            TextInputStyle.Paragraph, "I really enjoyed...", 0, 1000, false)
-                        .Build();
+                    await arg.RespondWithModalAsync(modal);
+                }
 
-                await arg.RespondWithModalAsync(modal);
                 break;
             }
+            case ComponentType.ActionRow:
+            case ComponentType.SelectMenu:
+            case ComponentType.TextInput:
+            case ComponentType.ModalSubmit:
             default:
             {
                 // Unhandled interaction type

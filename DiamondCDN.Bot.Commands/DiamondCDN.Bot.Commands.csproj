@@ -15,6 +15,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\DiamondCDN.Bot.Common\DiamondCDN.Bot.Common.csproj" />
+      <ProjectReference Include="..\DiamondCDN.Bot.Services\DiamondCDN.Bot.Services.csproj" />
     </ItemGroup>
 
 </Project>

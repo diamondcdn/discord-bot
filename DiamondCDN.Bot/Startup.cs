@@ -34,7 +34,6 @@ public class Startup
         _client = client ?? new DiscordSocketClient(new DiscordSocketConfig
         {
             DefaultRetryMode = RetryMode.RetryRatelimit,
-            GatewayIntents = GatewayIntents.All,
             LogLevel = LogSeverity.Debug
         });
 
@@ -69,6 +68,8 @@ public class Startup
 #endif
 
         await _client.SetActivityAsync(new Game("your websites", ActivityType.Watching));
+        
+        await _provider.GetRequiredService<ITicketService>().SendSupportMessageAsync();
     }
 
     public async Task RunAsync()
@@ -90,7 +91,6 @@ public class Startup
                 options.AddConsole();
 #else
                 options.SetMinimumLevel(LogLevel.Information);
-                options.AddSystemdConsole();
 #endif
             })
             .AddSingleton(_client)
@@ -98,6 +98,7 @@ public class Startup
             .AddSingleton(Configuration)
             .AddSingleton<LoggingService>()
             .AddSingleton<InteractionHandlerService>()
+            .AddSingleton<ITicketService, TicketService>()
             .AddSingleton<IStartupService, StartupService>()
             .BuildServiceProvider();
     }
